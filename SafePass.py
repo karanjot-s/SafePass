@@ -112,7 +112,7 @@ def authorise():
         line = userFile.read().replace("\n", "")
 
     # checking for mew user ie seeing if no master password is saved
-    if line == "":
+    if line == "0":
 
         # Remove all passwords just for security
         with open(PASS_DIR, "w") as passFile:
