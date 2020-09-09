@@ -1,390 +1,701 @@
 # Imports
+from mysql.connector import connect as sql_connect
 from cryptography.fernet import Fernet
-import pyperclip
-import getpass
-import time
+from prompt_toolkit import prompt  # pip install prompt_toolkit
+from time import sleep
+import pyperclip  # pip install pyperclip
+import json
 import os
 
-# All the files
-BASE_DIR = os.path.dirname(__file__)
-RESOURCE_DIR = os.path.join(BASE_DIR, "resources/mainfile")
-PASS_DIR = os.path.join(RESOURCE_DIR, 'main.txt')
-USER_DIR = os.path.join(RESOURCE_DIR, 'users.txt')
-KEY_DIR = os.path.join(RESOURCE_DIR, "key.key")
 
 
-# Main Functions
+# Functions
 
-
-def check_for_files():
+def make_pref_file():
     """
-    check if the files are present
+    Make a preferences.json file
     """
+    pref_dict = {
+        "default_user": None
+    }
 
-    # pass dir
+    with open(os.path.join(os.path.dirname(__file__), "preferences.json"), "w") as pref:
+        pref.write(json.dumps(pref_dict, indent=4))
+    
+    return pref_dict
+
+
+def take_pass(text_to_prompt):
+    return prompt(text_to_prompt, is_password=True)
+
+
+def fetch_data(cursor, *tables):
+    """
+    Fetch all the data from database
+    """
+    final = []
+
+    for table in tables:
+
+        cursor.execute(f"SELECT * FROM {table};")
+        data = cursor.fetchall()
+        final.append(data)
+
     try:
+        return final if len(final) > 1 else final[0]
+    except:
+        return []
 
-        f = open(PASS_DIR)
 
-    except FileNotFoundError or FileExistsError:
+def db_change(table, column, value, condition):
+    """
+    Updates database
+    """
+    global database
+    global sql_cursor
+    global users
+    global passwords
 
-        print(f"{PASS_DIR} should be there")
-        print("The FILE NOT FOUND. Please check or contact Karanjot Singh")
-        input("Press any key to exit.")
-        quit()
+    query = f'UPDATE {table} SET {column}="{value}" WHERE {condition};'
+    sql_cursor.execute(query)
+    database.commit()
 
-    finally:
+    users, passwords = fetch_data(sql_cursor, "users", "passwords")
 
-        f.close()
 
-    # user dir
+def get_preferences():
+    """
+    Loads the preferences
+    """
     try:
+        with open(os.path.join(os.path.dirname(__file__), "preferences.json")) as pref:
+            pref_dict = json.loads(pref.read())
+        return pref_dict
 
-        f = open(USER_DIR)
-
-    except FileNotFoundError or FileExistsError:
-
-        print(f"{USER_DIR} should be there")
-        print("The FILE NOT FOUND. Please check or contact Karanjot Singh")
-        input("Press any key to exit.")
-        quit()
-
-    # key dir
-    try:
-
-        f = open(KEY_DIR)
-
-    except FileNotFoundError or FileExistsError:
-
-        print(f"{KEY_DIR} should be there")
-        print("The FILE NOT FOUND. Please check or contact Karanjot Singh")
-        input("Press any key to exit.")
-        quit()
-
-    finally:
-
-        f.close()
+    except:
+        return make_pref_file()
 
 
-def register():
+def update_pref(key, value):
+    """
+    Updates the preferences
+    """
+    global pref
+
+    pref[key] = value
+
+    with open(os.path.join(os.path.dirname(__file__), "preferences.json"), "w") as prefer:
+        prefer.write(json.dumps(pref, indent=4))
+
+
+def login(users_list, default=None):
+    """
+    Welcomes the user with login menu
+    """
+    global pref
+    user_present = False
+
+    while not user_present:
+
+        if pref["default_user"]:
+            username = pref["default_user"]
+        
+        else:
+            print("\nEnter your username. Enter new if you are a new user.")
+            username = input("Username : ")
+
+        if username == "new":
+            username = register_user(users_list)
+            continue
+
+        for user_num in range(len(users_list)):
+            if username == users_list[user_num][1]:
+
+                user_present = True  # breaks the while loop
+                user_id = users_list[user_num][0]
+                user = users_list[user_num][1]
+                user_pass = users_list[user_num][2]
+                user_ques = users_list[user_num][3]
+                user_ans = users_list[user_num][4]
+
+                break
+
+        else:
+            print("Incorrect Username\nTry Again")
+
+    pass_corr = False
+    forgot_pass = False
+
+    while not pass_corr:
+
+        if forgot_pass:
+            print(f"\nEnter the password for {username}")
+        else:
+            print(f"\nEnter the password for {username}. Forgot password? Type forgot")
+            print(f"If you are not {username} enter 0")
+
+        password = take_pass("Password : ")
+
+        if password == "forgot" and not forgot_pass:
+            user_pass = reset_pass(username, user_pass, user_ques, user_ans, forgot_pass=True)
+            forgot_pass = True
+
+            continue
+            
+        if password == "0":
+            
+            user_present = False
+            while not user_present:
+                print("Enter your username. Enter new if you are a new user.")
+                username = input("Username : ")
+                if username == "new":
+                    username = register_user(users_list)
+                    continue
+                for user_num in range(len(users_list)):
+                    if username == users_list[user_num][1]:
+                        user_present = True  # breaks the while loop
+                        user_id = users_list[user_num][0]
+                        user = users_list[user_num][1]
+                        user_pass = users_list[user_num][2]
+                        user_ques = users_list[user_num][3]
+                        user_ans = users_list[user_num][4]
+                        break
+                else:
+                    print("Incorrect Username\nTry Again\n")
+
+        if password == user_pass:
+            pass_corr = True
+        else:
+            print("Invalid password.\nTry Again\n")
+    
+    while True:
+        print(f"\nDo you want to set {user} as your default user?")
+        def_user = input("Your input (y/n) : ")
+
+        if def_user in "yY":
+            update_pref("default_user", user)
+            break
+
+        elif def_user in "nN":
+            break
+        else:
+            print("Invalid input")
+            print("Try Again\n")
+
+    print(f"\nWelcome {user}\n")
+
+    return {"id": user_id, "name": user, "password": user_pass, "ques": user_ques, "ans": user_ans}
+
+
+def reset_pass(username, password, question, answer, forgot_pass=False):
+    """
+    Resets the password
+    """
+    reset = False
+
+    while not reset:
+
+        if forgot_pass:
+
+            print("To reset the passord, answer this question.")
+            print("Type cancel to cancel resetting password")
+
+            if question[len(question)-1] == "?":
+                print(question)
+            else:
+                print(question+"?")
+
+            ans_inp = take_pass("Your answer : ")
+
+            if ans_inp.lower == 'cancel':
+                return
+            if ans_inp == answer:
+                print("Correct Answer!\n")
+                reset = True
+            else:
+                print("\nWrong Answer.")
+                print(f"Are you the real owner of {username}?")
+                print("Anyways try again\n")
+
+        else:
+            print("Confirm your old password")
+            print("Type cancel to cancel the resetting of password.")
+
+            old_pass = take_pass("Old Password : ")
+            if old_pass.lower == 'cancel':
+
+                return
+
+            if old_pass == "forgot":
+                forgot_pass == True
+            elif old_pass == password:
+
+                break
+
+            else:
+                print("Invalid Password.")
+                print("If you forgot your password enter forgot")
+
+    print("Now enter the new password")
+
+    while True:
+        new_pass = take_pass("New Password : ")
+        if valid_pass(new_pass) and new_pass != password:
+
+            print("Confirm the new password")
+            if new_pass == take_pass("New Password : "):
+
+                db_change("users", "password", new_pass, f'username="{username}"')
+                print("Password successfuly updated")
+
+                return new_pass
+
+            else:
+                print("Your passwords don't match.")
+                print("Enter your password again")
+
+
+def valid_user(username, user_list):
+    """
+    Checks if username is valid
+    """
+    if len(username) >= 6 and len(username) <= 20 and username != "username":
+
+        for user in user_list:
+
+            if user[1] == username:
+
+                print("This username already exists")
+                return False
+
+        return True  # This will only occur if loop is not broken by return
+
+    else:
+
+        print("This is not a valid username")
+        print("Username should be between 6 and 20 letters")
+
+        return False
+
+
+def valid_pass(password):
+    """
+    Checks if password is valid
+    """
+    if len(password) >= 8 and len(password) <= 25 and password != "forgot":
+        return True
+
+    else:
+        print("This is not a vaid password")
+        print("Password should be between 8 and 25 letters")
+
+        return False
+
+
+def register_user(user_list):
     """
     Registers a new user
     """
 
-    print("Enter a password which you want to set up to open app.")
-    time.sleep(2)  # to emphasis
-    print("This password will be asked whnever you enter the program.")
-    time.sleep(2)  # to emphasis
-    print("REMEMBER THIS PASSWORD. This is your master password.")
-    time.sleep(2.5)  # to emphasis
+    def db_register(username, password, ques, ans):
+        """
+        Registers the user and returns the user_id
+        """
+        global sql_cursor
+        global users
+        global database
 
-    # loop for password
-    while True:
+        sql_cursor.execute(f'INSERT INTO users(username, password, question, answer) VALUES("{username}", "{password}, {ques}, {ans}");')
+        print("Saving ...")
+        database.commit()
+        sql_cursor.execute(f'SELECT user_id FROM users WHERE username="{username}";')
 
-        # taking input for password
-        password = input("Your Password : ")
-        confpassword = input("Confirm your password : ")
-
-        # check if passwords are same
-        if password == confpassword:
-
-            # opening file and writing the master password in user file
-            with open(USER_DIR, "w") as userFile:
-                userFile.write(encrypt_message(password) + '\n')
-            print(
-                "Congratulations you are registered seccesfully. Now you can start saving your passwords.")
-
-            # This return is just to break the loop and exit the function
-            return
-
-        # an infinite loop until user enters correct password
-        else:
-            print("Your Passwords do not match")
-
-
-def authorise():
-    """
-    Traps user in loop untill correct password is not entered
-    """
-
-    # opening and reading the master password
-    with open(USER_DIR, "r") as userFile:
-        line = userFile.read().replace("\n", "")
-
-    # checking for mew user ie seeing if no master password is saved
-    if line == "0":
-
-        # Remove all passwords just for security
-        with open(PASS_DIR, "w") as passFile:
-            passFile.write("")
-
-        # Generate a new key to encrypt
-        generate_key()
-
-        # Register User
-        register()
-
-    # if user is already using the program
-    else:
-
-        while True:
-
-            # asking for password (getpass is just so that password is hidden)
-            password = getpass.getpass(prompt="Enter the password : ")
-
-            # Matching the password
-            if password == decrypt_message(line):
-
-                print("Password matched!\nWelcome\n")
-                # This return is just to break the loop and exit the function
-                return
-
-            else:
-
-                print("Incorrect password.\nTry Again.\n")
-
-
-def check_service_presence(service):
-    """
-    Returns True is service is not present
-    """
-
-    # Opens the file for reading
-    with open(PASS_DIR, "r") as passFile:
-
-        # converts all the lines into a list
-        allpasslst = passFile.readlines()
-
-        # Traverses through the list
-        for line in allpasslst:
-
-            # Makes the list of service and checks for repeat
-            passInfo = line.split(", ")
-
-            # passInfo[0] is service name
-            if decrypt_message(passInfo[0]) == service:
-                return False
-
-        return True
-
-
-def check_service_num_presence(service_num):
-    """
-    Returns True if there is a service corr to the number
-    """
-
-    # Opens the file for reading
-    with open(PASS_DIR, "r") as passFile:
-
-        # converts all the lines into a list
-        allpasslst = passFile.readlines()
-
-        if service_num <= len(allpasslst):
-            return True
-        else:
-            return False
-
-
-def write_pass():
-    """
-    Takes input from user,
-    and appends the file with password.
-    """
-
-    newserviceEntered = False
+        return sql_cursor.fetchone()[0]
 
     while True:
 
-        # to prevent reprtition of asking this again
-        if not(newserviceEntered):
+        print("Enter the username you want")
+        print("Type cancel if you want to cancel registering")
 
-            # Taking service served by password as input
-            print("Enter what is the new password for?")
-            newservice = input("Your input : ")
-            newserviceEntered = True
+        username = input("Your Username : ")
+        if username == 'cancel':
 
-        print()
+            print("Canceling ...")
+            return None
 
-        # to prevent repitition
-        if check_service_presence(newservice):
-
-            # Taking the password as input
-            print("Enter the password you want to save.")
-            newPass = input("Your input : ")
-
-            print()
-
-            # Making a list and converting into str which will entered as text
-            passlst = [encrypt_message(newservice), encrypt_message(newPass)]
-            passstr = ", ".join(passlst)
-
-            # Opening the file for appending in read text mode
-            try:
-
-                with open(PASS_DIR, "a") as passFile:
-                    passFile.write(passstr + "\n")
-
-            except Exception:
-
-                print("Unable to save password")
-
-            print("Successfully saved the password\n")
-            break
-
-        # if the password for service already exists
-        else:
-
-            print("This service of password already exists")
+        if valid_user(username, user_list):
 
             while True:
-                # ask to replace
-                print("Do you want to replace the older one?")
-                delete_input = input("Your input (y/n) : ").lower()
+                print("Enter the password you want")
+                password = take_pass("Your Password : ")
 
-                if delete_input == "y":
+                if valid_pass(password):
+                    print("Confirm your password")
+                    conf_pass = take_pass("Your Password : ")
 
-                    # delete the old one and continue
-                    delete_pass(newservice)
-                    break
+                    if conf_pass == password:
+                        print("Enter a personal question only you know the answer to which.")
+                        print("For Example, Name of your first pet, or Name of city you were born in, etc")
 
-                elif delete_input == "n":
+                        ques = input("Your question : ")
+                        ans = take_pass("Your answer : ")
 
-                    # ask to change the new service
-                    print("Then might like to change the service")
+                        user_id = db_register(username, password, ques, ans)
+                        print(f"You are now registered with user id {user_id}")
 
-                    # to enable to ask again to enter the service
-                    newserviceEntered = False
+                        return username
+
+                    else:
+                        print("Your Passwords don't match.Try Again\n")
+
+
+def do_user():
+    """
+    Main user menu
+    """
+    global user
+
+    while True:
+
+        print("*********************************************")
+        print("Enter 1 to change username")
+        print("Enter 2 to reset the password")
+        print("Enter 3 to delete the account")
+        print("Enter 4 to go back")
+        print("*********************************************")
+        print()
+
+        do_user = input("Your Input : ")
+
+        if do_user == "1":
+
+            new_user = input("Enter new username : ")
+
+            if valid_user(new_user, user):
+
+                print("Are you sure you want to change the username?")
+                s_ans = input("Your Answer (y/n) : ").lower()
+
+                if s_ans == "y":
+
+                    db_change("users", "username", new_user, f'username="{user["name"]}"')
+                    user["name"] = new_user
+                    print("Successfully changed the username")
+                    
+                elif s_ans == "n":
+
+                    print("Ok! then cancelling the change ...")
+
+                else:
+                    print("Invalid input try again")
+
+        elif do_user == "2":
+
+            reset_pass(user['name'], user['password'], user['ques'], user['ans'])
+
+        elif do_user == "3":
+
+            print("Are you sure you want to delete your user.")
+            print("It will delete all your saved password.")
+            print("Make sure you back up all your password before deleting them")
+
+            while True:
+
+                conf_del = input("Are you sure? (y/n) : ").lower()
+
+                if conf_del == "y":
+
+                    while True:
+
+                        conf_pass = take_pass("Confirm your password : ")
+
+                        if conf_pass == user["password"]:
+
+                            delete_user(user["name"], user["id"])
+
+                            break
+
+                        else:
+                            print("Invalid password.\nTry again.")
+
+                elif conf_del == "n":
+                    
+                    print("Cancelling Deletion ...")
                     break
 
                 else:
+                    print("Invalid input.\nTry again.\n")
 
-                    print("Invalid Command\nTry Again\n")
+        elif do_user == "4":
+
+            break
 
 
-def show_all_service():
+def delete_user(username, user_id):
+    """
+    Deletes the user from database
+    """
+    global sql_cursor
+    global database
+
+    print("Are you absolutely sure that you want to delete your account.")
+    conf_del = input("(y/n) : ").lower()
+
+    if conf_del == "y":
+
+        print("Deleting...")
+
+        sql_cursor.execute(f"DELETE FROM passwords WHERE user_id={user_id};")
+        sql_cursor.execute(f'DELETE FROM users WHERE username="{username}";')
+        database.commit()
+
+        print("Account successfully deleted")
+        print("You need to start the program again")
+        print("Exiting now")
+        sleep(5)
+        quit()
+
+    else:
+        print("Cancelling deletion ...")
+        return
+
+
+# Password Funcs
+
+
+def show_all_service(pass_list):
     """
     Reads and prints all the services for user reference
     """
+    service_list = []
 
-    # Opens the file for reading
-    with open(PASS_DIR, "r") as passFile:
+    for pass_num in range(len(pass_list)):
 
-        # converts all the lines into a list
-        allpasslst = passFile.readlines()
+        service_list.append(pass_list[pass_num][1])
+        print(f"{pass_num + 1}. {pass_list[pass_num][1]}")
 
-        # Traverses through the list
-        for index, line in enumerate(allpasslst):
-
-            # Makes the list of service and password and print it
-            passInfo = line.split(", ")
-            print(f"{ index+1 }. { decrypt_message(passInfo[0]) }")
+    return service_list
 
 
-def no_of_pass():
+def find_pass(pass_list, service):
     """
-    Returns the number of passwords saved
+    Returns the pass word from the list
     """
-
-    with open(PASS_DIR, "r") as passFile:
-        return len(passFile.readlines())
-
-
-def show_pass(service):
-    """
-    returns the password of service entred in decrypted form
-    """
-
-    # Opens the file for reading
-    with open(PASS_DIR, "r") as passFile:
-
-        # converts all the lines into a list
-        allpasslst = passFile.readlines()
-
-        # Traverses through the list
-        for line in allpasslst:
-
-            try:
-                # Makes the list of service and password and return password
-                passInfo = line.split(", ")
-                if decrypt_message(passInfo[0]) == service:
-                    return decrypt_message(passInfo[1])
-
-            except Exception as e:
-                print(e)
-                print(line)
-
-
-def show_pass_by_num(num):
-    """
-    Returns the password corr to a number
-    """
-
-    # Opens the file for reading
-    with open(PASS_DIR, "r") as passFile:
-
-        # converts all the lines into a list
-        allpasslst = passFile.readlines()
-
-        try:
-            passInfo = allpasslst[num-1].split(", ")
-            return decrypt_message(passInfo[1])
-
-        except Exception as e:
-            print(e)
-            print(num-1)
-
-
-def show_username_by_num(num):
-    """
-    Returns the password corr to a number
-    """
-
-    # Opens the file for reading
-    with open(PASS_DIR, "r") as passFile:
-
-        # converts all the lines into a list
-        allpasslst = passFile.readlines()
-
-        try:
-            passInfo = allpasslst[num-1].split(", ")
-            return decrypt_message(passInfo[0])
-
-        except Exception as e:
-            print(e)
-            print(num-1)
+    for pass_info in pass_list:
+        if pass_info[1] == service:
+            return pass_info[2]
 
 
 def delete_pass(service):
     """
-    Deletes the password and service of service entered
+    deletes a password
+    """
+    global passwords
+    global sql_cursor
+    global database
+
+    while True:
+        print(f"Are you sure you want to delete the password for {service}")
+        conf = input("Confirmation (y/n) : ").lower()
+
+        if conf == "y":
+
+            sql_cursor.execute(f'DELETE FROM passwords WHERE service="{service}"')
+
+            for num in range(len(passwords)):
+
+                if passwords[num][1] == service:
+                    passwords.pop(num)
+                    break
+
+            database.commit()
+            break
+
+        elif conf == "n":
+            print("Cancelling deletion .. ")
+            break
+
+        else:
+            print("Invalid input.")
+            print("Try Again")
+
+
+def add_new_pass(pass_list, user_id):
+    """
+    Adds a new password by taking input
+    """
+    
+    new_service_entered = False
+    add = True
+
+    while add:
+
+        if not new_service_entered:
+
+            print("Enter what is the new password for?")
+            new_service = input("Service : ")
+            new_service_entered = True
+        
+        print()
+
+        if check_ser_presence(new_service, pass_list):
+
+            print("Enter the password you want to save.")
+            new_pass = take_pass("Password : ")
+
+            print()
+
+            write_pass(new_service, new_pass, user_id)
+            add = False
+        
+        else:
+
+            print("This service already exists.")
+
+            while True:
+
+                print("Enter 1 to replace the older password")
+                print("Enter 2 to change the service")
+                print("Enter 3 to cancel the operation.")
+
+                add_inp = input("Your input")
+
+                if add_inp == "1":
+                    delete_pass(new_service)
+                    break
+                    
+                elif add_inp == "2":
+                    new_service_entered = False
+                    break
+
+                elif add_inp == "3":
+                    add = False
+                    break
+
+                else:
+                    print("Invalid command!")
+                    print("Try Again")
+
+def check_ser_presence(service, user_pass_list):
+    """
+    Returns True is service is not present
     """
 
-    # check for presence of service
-    if not check_service_presence(service):
+    for pass_info in user_pass_list:
+        if pass_info[1] == service:
+            return False
+    
+    return True
 
-        # Opening the file
-        with open(PASS_DIR, "r") as passFile:
+def write_pass(service, password, user_id):
+    """
+    adds the service and passwords to the list
+    """
+    global sql_cursor
+    global database
+    global passwords
 
-            # putting file content in a list
-            lines = passFile.readlines()
+    query = f'INSERT INTO passwords(service,pass,user_id) values("{service}","{password}","{user_id}");'
+    sql_cursor.execute(query)
+    print("Saving ...")
+    database.commit()
 
-        # Traversing the lines
-        for index, line in enumerate(lines):
+    passwords = fetch_data(sql_cursor, "passwords")
 
-            # Separating service and password in list
-            passInfo = line.split(", ")
+    print("Password saved successfully\n")
 
-            # Finding and deleting the service
-            if decrypt_message(passInfo[0]) == service:
-                del lines[index]
 
-        # Writing the resultant list in the file
-        with open(PASS_DIR, "w") as passFile:
-            passFile.writelines(lines)
+def update_service(pass_list, user_id):
+    """
+    Updates the service name
+    """
+    global sql_cursor
+    global database
+    global passwords
+
+    print("Enter the name of old service")
+    old_ser = input("Service : ")
+    
+    if check_ser_presence(old_ser, pass_list):
+        print(f"{old_ser} is not saved yet.")
 
     else:
+        print("Enter new service name")
+        new_ser = input("New Service : ")
 
-        print("service is already not there")
+        if check_ser_presence(new_ser, pass_list):
+
+            sql_cursor.execute(f'UPDATE passwords SET service="{new_ser}" WHERE service="{old_ser}" AND user_id="{user_id}";')
+
+            while True:
+
+                print(f"Are you sure you want to change {old_ser} to {new_ser}")
+                conf = input("Confirmation (y/n) : ").lower()
+
+                if conf == "y":
+                    database.commit()
+
+                    for pass_num in range(len(passwords)):
+                        if passwords[pass_num][1] == old_ser and passwords[pass_num][3] == user_id:
+                            passwords[pass_num][1] = new_ser
+
+                    print()
+                    break
+
+                elif conf == "n":
+                    print("Cancelling the change ...")
+                    print()
+                    break
+                
+                else:
+                    print("\nInvalid input")
+                    print("Try again\n")
+    
+        else:
+            print(f"There already exists a password for {new_ser}.\n")
+
+
+def update_password(pass_list, user_id):
+    """
+    Updates the password
+    """
+    global sql_cursor
+    global database
+    global passwords
+
+    print("Enter the name service for which you want to change the password")
+    service = input("Service : ")
+    print()
+    
+    if check_ser_presence(service, pass_list):
+        print(f"{service} is not saved yet.")
+
+    else:
+        print("Enter new password")
+        password = take_pass("New Service : ")
+
+        sql_cursor.execute(f'UPDATE passwords SET pass="{password}" WHERE service="{service}" AND user_id="{user_id}";')
+
+        while True:
+
+            print(f"Are you sure you want to change the password for {service}")
+            conf = input("Confirmation (y/n) : ").lower()
+
+            if conf == "y":
+                database.commit()
+
+                passwords = fetch_data(sql_cursor, "passwords")
+                print()
+                break
+
+            elif conf == "n":
+                print("Cancelling the change ...")
+                print()
+                break
+            
+            else:
+                print("\nInvalid input")
+                print("Try again\n")
 
 
 def generate_key():
@@ -394,8 +705,10 @@ def generate_key():
     # generating key
     key = Fernet.generate_key()
 
+    key_dir = os.path.join(os.path.dirname(__file__), "resources/key")
+
     # writing key in file
-    with open(KEY_DIR, "wb") as keyFile:
+    with open(key_dir, "wb") as keyFile:
         keyFile.write(key)
 
 
@@ -404,7 +717,12 @@ def load_key():
     Loads the previously generated key
     """
 
-    return open(KEY_DIR, "rb").read()
+    key_dir = os.path.join(os.path.dirname(__file__), "resources/key")
+
+    try:
+        return open(key_dir, "rb").read()
+    except:
+        return None
 
 
 def encrypt_message(message):
@@ -447,107 +765,33 @@ def decrypt_message(encrypted_message):
     return decrypted_message.decode()
 
 
-def update_password(service):
-    """
-    Update the password and service of service entered
-    """
-
-    # check for presence of service
-    if not check_service_presence(service):
-
-        # Opening the file
-        with open(PASS_DIR, "r") as passFile:
-
-            # putting file content in a list
-            lines = passFile.readlines()
-
-        # Traversing the lines
-        for index, line in enumerate(lines):
-
-            # Separating service and password in list
-            passInfo = line.split(", ")
-
-            # Finding and deleting the service
-            if decrypt_message(passInfo[0]) == service:
-
-                while True:
-
-                    # asking user what to do
-                    print("\nEnter 1 to change service")
-                    print("Enter 2 to change password\n")
-                    inp = input("Your Input : ")
-
-                    # chnging service name
-                    if inp == "1":
-                        ser = input("Enter the new name for service : ")
-                        passInfo[0] = encrypt_message(ser)
-                        print("Name of service changed.")
-                        done = True
-
-                    # changing service password
-                    elif inp == "2":
-                        passw = input("Enter the new password : ")
-                        passInfo[1] = encrypt_message(passw)
-                        print("Password changed")
-                        done = True
-
-                    # else for invalid input
-                    else:
-                        print("\nInvalid input. Try Again\n")
-                        done = False
-
-                    # will only execute once password is changed
-                    if done:
-                        print("\nEnter 1 to exit")
-                        print("Enter anything else to still change something")
-                        again = input("Your input : ")
-
-                        if again == "1":
-
-                            # writing to lines list
-                            lines[index] = ",".join(passInfo)
-                            print()
-
-                            # Writing the resultant list in the file
-                            with open(PASS_DIR, "w") as passFile:
-                                passFile.writelines(lines)
-
-                                # This return is just to break the loop and exit the function
-                                return
-
-    else:
-
-        print("service is not there")
-
-
 if __name__ == "__main__":
 
-    # The main code execution starts here
+    with open("password.txt") as pass_file:
+        mysql_db_pass = pass_file.read()
 
-    # Checking if all the neccessary files are available
-    check_for_files()
+    # initiating mysql
+    database = sql_connect(
+        host="localhost",
+        user="root",
+        password=mysql_db_pass,
+        database="safepass"
+    )
+    sql_cursor = database.cursor()
 
-    # Welcome text
-    print()
-    print("Welcome to SafePass v1.1. The Ultimate password manager.")
-    print("Now you don't need to remember multiple passwords. Only remember one password and view all your passwords with it only.")
-    print("All your passwords here are encrypted, so you don't need to worry if someone opened your your file.\n")
+    users, passwords = fetch_data(sql_cursor, "users", "passwords")
+    pref = get_preferences()
 
-    time.sleep(3)
+    user = login(users)
 
-    authorise()
-
-    time.sleep(1)
-
-    print("*********************************************")
-    print(f"You have {no_of_pass()} passwords saved.\n")
-    print("*********************************************")
-
-    print()
-
-    time.sleep(1)
-
+    # Main Loop
     while True:
+
+        user_pass_list = []
+
+        for pass_list in passwords:
+            if pass_list[3] == user["id"]:
+                user_pass_list.append(pass_list)
 
         print("*********************************************")
         print("Enter 1 to view a password")
@@ -556,121 +800,129 @@ if __name__ == "__main__":
         print("Enter 4 to view all saved passwords \n"
               "\t(This will only show what is password saved for.)")
         print("Enter 5 to update a password")
-        print("Enter Ctr + c to exit anytime")
+        print("Enter 6 for user related things")
+        print("Enter 7 to exit")
         print("*********************************************")
         print()
 
-        time.sleep(2)
+        do = input("Your Input : ")
 
-        do = input("Your input : ")
-
-        if do != "1" and do != "2" and do != "3" and do != "4" and do != "5":
-            print("Invalid Input.\nTry Again")
-
-        elif do == "1":
-
-            print("You chose to view a password.")
-
-            time.sleep(1)
+        if do == "1":
 
             print("\n******************************************************")
-            show_all_service()
+            service_list = show_all_service(user_pass_list)
             print("******************************************************")
             print()
 
-            time.sleep(1)
-
             print("Which password do you want to see?")
-            userservice = input("Your input : ")
+            service_input = input("Your input : ")
 
-            try:
-                usernum = int(userservice)
+            if service_input in service_list:
+                print()
+                pyperclip.copy(find_pass(user_pass_list, service_input))
+                print("Your password has been copied. \nJust go ahead and pase it where you want.")
+                print()
+            
+            else:
+                try:
+                    service_num = int(service_input)
 
-                if check_service_num_presence(usernum):
+                    if service_num <= len(service_list):
+                        print()
+                        pyperclip.copy(user_pass_list[service_num-1][2])
+                        print("Your password has been copied. \nJust go ahead and pase it where you want.")
+                        print()
 
-                    print()
-                    pyperclip.copy(show_pass_by_num(usernum))
-                    print(
-                        f"The password for '{show_username_by_num(usernum)}' has been copied to your clipboard.")
-                    print("Just go ahead and paste it.")
-                    print()
+                    else:
+                        print("There is no password saved for this.")
+                        print("See the above list for your saved passwords.")
+                        print()
 
-                    time.sleep(3)
-
-                else:
-                    print("There is no password saved for this.")
-                    print("See the above list for your saved passwords.")
-                    print()
-
-            except:
-
-                if (not check_service_presence(userservice)):
-
-                    print()
-                    pyperclip.copy(show_pass(userservice))
-                    print(
-                        f"The password for '{userservice}' has been copied to your clipboard.")
-                    print("Just go ahead and paste it.")
-                    print()
-
-                    time.sleep(3)
-
-                else:
+                except:
                     print("There is no password saved for this.")
                     print("See the above list for your saved passwords.")
                     print()
 
         elif do == "2":
 
-            print("You chose to delete a password.")
-
-            time.sleep(1)
-
             print("******************************************************")
-            show_all_service()
+            service_list = show_all_service(user_pass_list)
             print("******************************************************")
             print()
-
-            time.sleep(1)
 
             print("Which password do you want to delete")
             delPass = input("Your Input : ")
 
-            delete_pass(delPass)
-
+            if delPass in service_list:
+                delete_pass(delPass)
+            else:
+                print("\n There is no password saved for this.")
+                print("See the list for your saved passwords")
             print()
 
         elif do == "3":
-            print("You chose to enter a new password.\n")
-
-            time.sleep(1)
-
-            write_pass()
+            
+            add_new_pass(user_pass_list, user["id"])
 
         elif do == "4":
-            print("******************************************************")
-            show_all_service()
+            print("\n******************************************************")
+            show_all_service(user_pass_list)
             print("******************************************************")
             print()
 
         elif do == "5":
-            print("You chose to update a password")
+            up_pass = None
 
-            time.sleep(1)
-
-            print("******************************************************")
-            show_all_service()
+            print("\n******************************************************")
+            show_all_service(user_pass_list)
             print("******************************************************")
             print()
 
-            time.sleep(1)
+            while True:
 
-            print("Which password do you want to update")
-            updPass = input("Your Input : ")
+                print("Enter 1 if you want to update service name")
+                print("Enter 2 if you want to update password")
+                print("Enter 3 to view all saved passwods")
+                print("Enter 4 to go back")
+                print()
 
-            update_password(updPass)
+                update = input("Your input : ")
+
+                if update == "1":
+                    update_service(user_pass_list, user["id"])
+
+                elif update == "2":
+                    update_password(user_pass_list, user["id"])
+
+                elif update == "3":
+                    print("\n******************************************************")
+                    show_all_service(user_pass_list)
+                    print("******************************************************")
+                    print()
+
+                elif update == "4":
+                    print()
+                    break
+
+        elif do == "6":
+
+            print("Confirm your user password")
+            conf_password = take_pass("Your Password : ")
+
+            if conf_password == user["password"]:
+                
+                do_user()
+
+            else:
+                print("Invalid Password!\n")
+
+        elif do == "7":
+            break
 
         else:
-            print("Some error occured")
-            input("Press enter to exit")
-            quit()
+            print("\nInvalid Input.\nTry Again.\n")
+
+
+    # Clearing up the program
+    database.close()
+    quit()
