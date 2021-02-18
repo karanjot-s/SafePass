@@ -8,24 +8,25 @@ import json
 import os
 
 
-
 # Functions
+
 
 def make_pref_file():
     """
     Make a preferences.json file
     """
-    pref_dict = {
-        "default_user": None
-    }
+    pref_dict = {"default_user": None}
 
     with open(os.path.join(os.path.dirname(__file__), "preferences.json"), "w") as pref:
         pref.write(json.dumps(pref_dict, indent=4))
-    
+
     return pref_dict
 
 
 def take_pass(text_to_prompt):
+    """
+    Take password input from user
+    """
     return prompt(text_to_prompt, is_password=True)
 
 
@@ -84,7 +85,9 @@ def update_pref(key, value):
 
     pref[key] = value
 
-    with open(os.path.join(os.path.dirname(__file__), "preferences.json"), "w") as prefer:
+    with open(
+        os.path.join(os.path.dirname(__file__), "preferences.json"), "w"
+    ) as prefer:
         prefer.write(json.dumps(pref, indent=4))
 
 
@@ -99,7 +102,7 @@ def login(users_list, default=None):
 
         if pref["default_user"]:
             username = pref["default_user"]
-        
+
         else:
             print("\nEnter your username. Enter new if you are a new user.")
             username = input("Username : ")
@@ -137,13 +140,15 @@ def login(users_list, default=None):
         password = take_pass("Password : ")
 
         if password == "forgot" and not forgot_pass:
-            user_pass = reset_pass(username, user_pass, user_ques, user_ans, forgot_pass=True)
+            user_pass = reset_pass(
+                username, user_pass, user_ques, user_ans, forgot_pass=True
+            )
             forgot_pass = True
 
             continue
-            
+
         if password == "0":
-            
+
             user_present = False
             while not user_present:
                 print("Enter your username. Enter new if you are a new user.")
@@ -167,7 +172,7 @@ def login(users_list, default=None):
             pass_corr = True
         else:
             print("Invalid password.\nTry Again\n")
-    
+
     while True:
         print(f"\nDo you want to set {user} as your default user?")
         def_user = input("Your input (y/n) : ")
@@ -184,7 +189,13 @@ def login(users_list, default=None):
 
     print(f"\nWelcome {user}\n")
 
-    return {"id": user_id, "name": user, "password": user_pass, "ques": user_ques, "ans": user_ans}
+    return {
+        "id": user_id,
+        "name": user,
+        "password": user_pass,
+        "ques": user_ques,
+        "ans": user_ans,
+    }
 
 
 def reset_pass(username, password, question, answer, forgot_pass=False):
@@ -200,14 +211,14 @@ def reset_pass(username, password, question, answer, forgot_pass=False):
             print("To reset the passord, answer this question.")
             print("Type cancel to cancel resetting password")
 
-            if question[len(question)-1] == "?":
+            if question[len(question) - 1] == "?":
                 print(question)
             else:
-                print(question+"?")
+                print(question + "?")
 
             ans_inp = take_pass("Your answer : ")
 
-            if ans_inp.lower == 'cancel':
+            if ans_inp.lower == "cancel":
                 return
             if ans_inp == answer:
                 print("Correct Answer!\n")
@@ -222,7 +233,7 @@ def reset_pass(username, password, question, answer, forgot_pass=False):
             print("Type cancel to cancel the resetting of password.")
 
             old_pass = take_pass("Old Password : ")
-            if old_pass.lower == 'cancel':
+            if old_pass.lower == "cancel":
 
                 return
 
@@ -305,7 +316,9 @@ def register_user(user_list):
         global users
         global database
 
-        sql_cursor.execute(f'INSERT INTO users(username, password, question, answer) VALUES("{username}", "{password}, {ques}, {ans}");')
+        sql_cursor.execute(
+            f'INSERT INTO users(username, password, question, answer) VALUES("{username}", "{password}, {ques}, {ans}");'
+        )
         print("Saving ...")
         database.commit()
         sql_cursor.execute(f'SELECT user_id FROM users WHERE username="{username}";')
@@ -318,7 +331,7 @@ def register_user(user_list):
         print("Type cancel if you want to cancel registering")
 
         username = input("Your Username : ")
-        if username == 'cancel':
+        if username == "cancel":
 
             print("Canceling ...")
             return None
@@ -334,8 +347,12 @@ def register_user(user_list):
                     conf_pass = take_pass("Your Password : ")
 
                     if conf_pass == password:
-                        print("Enter a personal question only you know the answer to which.")
-                        print("For Example, Name of your first pet, or Name of city you were born in, etc")
+                        print(
+                            "Enter a personal question only you know the answer to which."
+                        )
+                        print(
+                            "For Example, Name of your first pet, or Name of city you were born in, etc"
+                        )
 
                         ques = input("Your question : ")
                         ans = take_pass("Your answer : ")
@@ -378,10 +395,12 @@ def do_user():
 
                 if s_ans == "y":
 
-                    db_change("users", "username", new_user, f'username="{user["name"]}"')
+                    db_change(
+                        "users", "username", new_user, f'username="{user["name"]}"'
+                    )
                     user["name"] = new_user
                     print("Successfully changed the username")
-                    
+
                 elif s_ans == "n":
 
                     print("Ok! then cancelling the change ...")
@@ -391,7 +410,7 @@ def do_user():
 
         elif do_user == "2":
 
-            reset_pass(user['name'], user['password'], user['ques'], user['ans'])
+            reset_pass(user["name"], user["password"], user["ques"], user["ans"])
 
         elif do_user == "3":
 
@@ -419,7 +438,7 @@ def do_user():
                             print("Invalid password.\nTry again.")
 
                 elif conf_del == "n":
-                    
+
                     print("Cancelling Deletion ...")
                     break
 
@@ -524,7 +543,7 @@ def add_new_pass(pass_list, user_id):
     """
     Adds a new password by taking input
     """
-    
+
     new_service_entered = False
     add = True
 
@@ -535,7 +554,7 @@ def add_new_pass(pass_list, user_id):
             print("Enter what is the new password for?")
             new_service = input("Service : ")
             new_service_entered = True
-        
+
         print()
 
         if check_ser_presence(new_service, pass_list):
@@ -547,7 +566,7 @@ def add_new_pass(pass_list, user_id):
 
             write_pass(new_service, new_pass, user_id)
             add = False
-        
+
         else:
 
             print("This service already exists.")
@@ -563,7 +582,7 @@ def add_new_pass(pass_list, user_id):
                 if add_inp == "1":
                     delete_pass(new_service)
                     break
-                    
+
                 elif add_inp == "2":
                     new_service_entered = False
                     break
@@ -576,6 +595,7 @@ def add_new_pass(pass_list, user_id):
                     print("Invalid command!")
                     print("Try Again")
 
+
 def check_ser_presence(service, user_pass_list):
     """
     Returns True is service is not present
@@ -584,8 +604,9 @@ def check_ser_presence(service, user_pass_list):
     for pass_info in user_pass_list:
         if pass_info[1] == service:
             return False
-    
+
     return True
+
 
 def write_pass(service, password, user_id):
     """
@@ -615,7 +636,7 @@ def update_service(pass_list, user_id):
 
     print("Enter the name of old service")
     old_ser = input("Service : ")
-    
+
     if check_ser_presence(old_ser, pass_list):
         print(f"{old_ser} is not saved yet.")
 
@@ -625,7 +646,9 @@ def update_service(pass_list, user_id):
 
         if check_ser_presence(new_ser, pass_list):
 
-            sql_cursor.execute(f'UPDATE passwords SET service="{new_ser}" WHERE service="{old_ser}" AND user_id="{user_id}";')
+            sql_cursor.execute(
+                f'UPDATE passwords SET service="{new_ser}" WHERE service="{old_ser}" AND user_id="{user_id}";'
+            )
 
             while True:
 
@@ -636,7 +659,10 @@ def update_service(pass_list, user_id):
                     database.commit()
 
                     for pass_num in range(len(passwords)):
-                        if passwords[pass_num][1] == old_ser and passwords[pass_num][3] == user_id:
+                        if (
+                            passwords[pass_num][1] == old_ser
+                            and passwords[pass_num][3] == user_id
+                        ):
                             passwords[pass_num][1] = new_ser
 
                     print()
@@ -646,11 +672,11 @@ def update_service(pass_list, user_id):
                     print("Cancelling the change ...")
                     print()
                     break
-                
+
                 else:
                     print("\nInvalid input")
                     print("Try again\n")
-    
+
         else:
             print(f"There already exists a password for {new_ser}.\n")
 
@@ -666,7 +692,7 @@ def update_password(pass_list, user_id):
     print("Enter the name service for which you want to change the password")
     service = input("Service : ")
     print()
-    
+
     if check_ser_presence(service, pass_list):
         print(f"{service} is not saved yet.")
 
@@ -674,7 +700,9 @@ def update_password(pass_list, user_id):
         print("Enter new password")
         password = take_pass("New Service : ")
 
-        sql_cursor.execute(f'UPDATE passwords SET pass="{password}" WHERE service="{service}" AND user_id="{user_id}";')
+        sql_cursor.execute(
+            f'UPDATE passwords SET pass="{password}" WHERE service="{service}" AND user_id="{user_id}";'
+        )
 
         while True:
 
@@ -692,7 +720,7 @@ def update_password(pass_list, user_id):
                 print("Cancelling the change ...")
                 print()
                 break
-            
+
             else:
                 print("\nInvalid input")
                 print("Try again\n")
@@ -742,7 +770,7 @@ def encrypt_message(message):
     # encrypting the messsage
     encrypted_message = f.encrypt(encoded_message)
 
-    return str(encrypted_message, 'utf-8')
+    return str(encrypted_message, "utf-8")
 
 
 def decrypt_message(encrypted_message):
@@ -751,7 +779,7 @@ def decrypt_message(encrypted_message):
     """
 
     # conversion to bytes
-    encrypted_message = bytes(encrypted_message, 'ascii')
+    encrypted_message = bytes(encrypted_message, "ascii")
 
     # loading key
     key = load_key()
@@ -772,10 +800,7 @@ if __name__ == "__main__":
 
     # initiating mysql
     database = sql_connect(
-        host="localhost",
-        user="root",
-        password=mysql_db_pass,
-        database="safepass"
+        host="localhost", user="root", password=mysql_db_pass, database="safepass"
     )
     sql_cursor = database.cursor()
 
@@ -797,8 +822,10 @@ if __name__ == "__main__":
         print("Enter 1 to view a password")
         print("Enter 2 to delete a password")
         print("Enter 3 to add a new password")
-        print("Enter 4 to view all saved passwords \n"
-              "\t(This will only show what is password saved for.)")
+        print(
+            "Enter 4 to view all saved passwords \n"
+            "\t(This will only show what is password saved for.)"
+        )
         print("Enter 5 to update a password")
         print("Enter 6 for user related things")
         print("Enter 7 to exit")
@@ -820,17 +847,21 @@ if __name__ == "__main__":
             if service_input in service_list:
                 print()
                 pyperclip.copy(find_pass(user_pass_list, service_input))
-                print("Your password has been copied. \nJust go ahead and pase it where you want.")
+                print(
+                    "Your password has been copied. \nJust go ahead and pase it where you want."
+                )
                 print()
-            
+
             else:
                 try:
                     service_num = int(service_input)
 
                     if service_num <= len(service_list):
                         print()
-                        pyperclip.copy(user_pass_list[service_num-1][2])
-                        print("Your password has been copied. \nJust go ahead and pase it where you want.")
+                        pyperclip.copy(user_pass_list[service_num - 1][2])
+                        print(
+                            "Your password has been copied. \nJust go ahead and pase it where you want."
+                        )
                         print()
 
                     else:
@@ -861,7 +892,7 @@ if __name__ == "__main__":
             print()
 
         elif do == "3":
-            
+
             add_new_pass(user_pass_list, user["id"])
 
         elif do == "4":
@@ -910,7 +941,7 @@ if __name__ == "__main__":
             conf_password = take_pass("Your Password : ")
 
             if conf_password == user["password"]:
-                
+
                 do_user()
 
             else:
@@ -921,7 +952,6 @@ if __name__ == "__main__":
 
         else:
             print("\nInvalid Input.\nTry Again.\n")
-
 
     # Clearing up the program
     database.close()
