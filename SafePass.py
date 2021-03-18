@@ -1,6 +1,5 @@
 # Imports
 from mysql.connector import connect as sql_connect
-from cryptography.fernet import Fernet
 from prompt_toolkit import prompt  # pip install prompt_toolkit
 from time import sleep
 import pyperclip  # pip install pyperclip
